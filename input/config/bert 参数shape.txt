@@ -1,0 +1,28 @@
+预训练模型参数
+
+torch.Size([21128, 768])       vob_size * embed
+torch.Size([512, 768])          pos_size * embed
+torch.Size([2, 768])           type_size * embed
+torch.Size([768])              bias
+torch.Size([768])              bias
+
+torch.Size([768, 768])         query
+torch.Size([768])
+torch.Size([768, 768])         Question
+torch.Size([768])
+torch.Size([768, 768])         value
+torch.Size([768])
+torch.Size([768, 768])         dense  
+torch.Size([768])
+torch.Size([768])              layerNorm
+torch.Size([768])
+torch.Size([3072, 768])        Intermediate dense 
+torch.Size([3072])
+torch.Size([768, 3072])       Output dense
+torch.Size([768])
+torch.Size([768])             Output layer normal
+torch.Size([768])
+
+
+torch.Size([768, 768])        bert pooler dense
+torch.Size([768])
