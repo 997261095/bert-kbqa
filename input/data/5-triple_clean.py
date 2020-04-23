@@ -5,13 +5,14 @@
 # @File    : triple_clean.py
 # @Software: PyCharm
 
-
+import os
 import pandas as pd
-
 
 '''
 构造NER训练集，实体序列标注，训练BERT+BiLSTM+CRF
 '''
+
+new_dir = "DB_Data"
 
 question_str = "<question"
 triple_str = "<triple"
@@ -47,4 +48,8 @@ for data_type in ["training", "testing"]:
 df = pd.DataFrame(triple_list, columns=["entity", "attribute", "answer"])
 print(df)
 print(df.info())
-df.to_csv("./DB_Data/clean_triple.csv", encoding='utf-8', index=False)
+
+if not os.path.exists(new_dir):
+    os.mkdir(new_dir)
+
+df.to_csv(os.path.join(new_dir, "clean_triple.csv"), encoding='utf-8', index=False)

@@ -17,7 +17,6 @@ def create_db():
         password="123456",
         host="127.0.0.1",
         port=3306,
-        db="KB_QA",
         charset="utf8"
     )
     conn = connect.cursor()  # 创建操作游标
