@@ -195,9 +195,9 @@ def text_match(attribute_list,answer_list,sentence):
         return "",""
 
 
-def main():
-
-    with torch.no_grad():
+class Model:
+    @torch.no_grad()
+    def __init__(self):
         tokenizer_inputs = ()
         tokenizer_kwards = {'do_lower_case': False,
                             'max_len': 64,
@@ -219,72 +219,93 @@ def main():
         sim_model = sim_model.to(device)
         sim_model.eval()
 
-        while True:
-            print("====="*10)
-            raw_text = input("问题：\n")
-            raw_text = raw_text.strip()
-            # 输入 quit 则退出。
-            if ( "quit" == raw_text ):
-                print("quit")
-                return
-            # 获取实体
-            entity = get_entity(model=ner_model, tokenizer=tokenizer, sentence=raw_text, max_len=64)
-            print("实体:", entity)
-            if '' == entity:
-                print("未发现实体")
-                continue
-            sql_str = "select * from nlpccqa where entity = '{}'".format(entity)
+    @torch.no_grad()
+    def query(self, raw_text) -> str:
+        # 获取实体
+        entity = get_entity(model=self.ner_model, tokenizer=self.tokenizer, sentence=raw_text, max_len=64)
+        
+        print("实体:", entity)
+        
+        if '' == entity:
+            return "未发现实体"
+        
+        sql_str = "select * from nlpccqa where entity = '{}'".format(entity)
 
-            triple_list = select_database(sql_str)
-            triple_list = list(triple_list)
-            print(triple_list)
-            if 0 == len(triple_list):
-                print("未找到 {} 相关信息".format(entity))
-                
-                print("正在通过网络查找中...")
-                WikiQuery.getInfobox(entity)
-                # if len(elem_dic) != 0:
-                #     for key in elem_dic:
-                #         #print(key.text, elem_dic[key].text)
-                #         if len(elem_dic[key].text) <= 10:
-                #             insert_data(entity, key.text, elem_dic[key].text)
+        triple_list = select_database(sql_str)
+        triple_list = list(triple_list)
+        
+        print(triple_list)
+        
+        if 0 == len(triple_list):
+            # 未找到相关信息
 
-                print("查找完毕")
+            print("未找到 {} 相关信息".format(entity))
 
-                continue
-            triple_list = list(zip(*triple_list))
-            print(triple_list)
+            print("正在通过网络查找中...")
 
-            attribute_list = triple_list[1]
-            answer_list = triple_list[2]
-            # 直接进行匹配
-            attribute, answer = text_match(attribute_list, answer_list, raw_text)
-            if attribute != '' and answer != '':
+            WikiQuery.getInfobox(entity)
+            # if len(elem_dic) != 0:
+            #     for key in elem_dic:
+            #         #print(key.text, elem_dic[key].text)
+            #         if len(elem_dic[key].text) <= 10:
+            #             insert_data(entity, key.text, elem_dic[key].text)
+
+            print("查找完毕")
+
+            return "未找到 {} 相关信息，尝试通过网络查找...".format(entity)
+
+        triple_list = list(zip(*triple_list))
+        print(triple_list)
+
+        attribute_list = triple_list[1]
+        answer_list = triple_list[2]
+        # 直接进行匹配
+        attribute, answer = text_match(attribute_list, answer_list, raw_text)
+        if attribute != '' and answer != '':
+            ret = "{}的{}是{}".format(entity, attribute, answer)
+        else:
+            self.sim_model = get_sim_model(config_file='./input/config/bert-base-chinese-config.json',
+                                           pre_train_model='./output/best_sim.bin',
+                                           label_num=len(self.sim_processor.get_labels()))
+
+            self.sim_model = self.sim_model.to(device)
+            self.sim_model.eval()
+            # 进行语义匹配
+            attribute_idx = semantic_matching(self.sim_model, self.tokenizer, raw_text, attribute_list, answer_list, 64).item()
+            if -1 == attribute_idx:
+                ret = ''
+            else:
+                attribute = attribute_list[attribute_idx]
+                answer = answer_list[attribute_idx]
                 ret = "{}的{}是{}".format(entity, attribute, answer)
-            else:
-                sim_model = get_sim_model(config_file='./input/config/bert-base-chinese-config.json',
-                                          pre_train_model='./output/best_sim.bin',
-                                          label_num=len(sim_processor.get_labels()))
+        
+        if '' == ret:
+            print("未找到{}相关信息".format(entity))
+            print("正在通过网络查找中...")
+            WikiQuery.getInfobox(entity)
+            return "未找到 {} 相关信息，尝试通过网络查找...".format(entity)
+        else:
+            return ret
 
-                sim_model = sim_model.to(device)
-                sim_model.eval()
-                # 进行语义匹配
-                attribute_idx = semantic_matching(sim_model, tokenizer, raw_text, attribute_list, answer_list, 64).item()
-                if -1 == attribute_idx:
-                    ret = ''
-                else:
-                    attribute = attribute_list[attribute_idx]
-                    answer = answer_list[attribute_idx]
-                    ret = "{}的{}是{}".format(entity, attribute, answer)
-            if '' == ret:
-                print("未找到{}相关信息".format(entity))
-                print("正在通过网络查找中………………………………")
-                WikiQuery.getInfobox(entity)
-            else:
-                print("回答:",ret)
 
 if __name__ == '__main__':
-    main()
+    
+    model = Model()
+
+    while True:
+
+        print("====="*10)
+
+        raw_text = input("问题：\n").strip()
+        
+        # 输入 quit 则退出。
+        if ( "quit" == raw_text ):
+            print("quit")
+            break
+        
+        ans = model.query(raw_text)
+        
+        print('回答:', ans)
 
 
 
