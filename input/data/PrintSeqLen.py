@@ -1,5 +1,9 @@
 import os
 
+"""
+查看整个句子的长度
+"""
+
 dir_name = 'sim_data'
 file_list = ['train.txt','dev.txt','test.txt']
 
@@ -14,8 +18,8 @@ for file in file_list:
 
             line_list = line.split('\t')
             question = list(line_list[1])
-            attribute = list(line_list[2])
-            add_len = len(question) + len(attribute)
+            attributes = list(line_list[2])
+            add_len = len(question) + len(attributes)
             if add_len > max_len:
                 max_len = add_len
     print("max_len",max_len)

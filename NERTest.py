@@ -1,15 +1,15 @@
-from BERT_CRF import BertCrf
+from BERT_CRF_Model import BertCrf
 from transformers import BertTokenizer
-from NER_main import NerProcessor,statistical_real_sentences,flatten,CrfInputFeatures
+from NERTrain import NerProcessor,statistical_real_sentences,flatten,CrfInputFeatures
 from torch.utils.data import DataLoader, RandomSampler,TensorDataset
 from sklearn.metrics import classification_report
 import torch
 import numpy as np
 from tqdm import tqdm, trange
 
-
-
-
+"""
+对命名实体识别模型进行简单的测试
+"""
 
 processor = NerProcessor()
 tokenizer_inputs = ()

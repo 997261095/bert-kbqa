@@ -1,0 +1,11 @@
+# Files created by SplitData.py
+NLPCC2016KBQA/*.txt
+
+# Files created by ConstructDatasetNer.py
+ner_data/
+
+# Files created by ConstructDatasetAttribute.py
+sim_data/
+
+# Files created by ConstructDB.py
+DB_Data/

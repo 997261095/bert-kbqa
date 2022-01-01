@@ -11,8 +11,9 @@ import pandas as pd
 from sqlalchemy import create_engine
 
 
+# 创建数据库，默认使用 root 用户
 def create_db():
-    connect = pymysql.connect(  # 连接数据库服务器-*-*-
+    connect = pymysql.connect(  # 创建连接，若账号密码不同请记得修改
         user="root",
         password="123456",
         host="127.0.0.1",
@@ -21,30 +22,25 @@ def create_db():
         charset="utf8"
     )
     conn = connect.cursor()  # 创建操作游标
-    # 你需要一个游标 来实现对数据库的操作相当于一条线索
 
-    #                          创建表
-    conn.execute("drop database if exists KB_QA")  # 如果new_database数据库存在则删除
+    conn.execute("drop database if exists KB_QA")  # 如果 KB_QA 数据库存在则删除
     conn.execute("create database KB_QA")  # 新创建一个数据库
-    conn.execute("use KB_QA")  # 选择new_database这个数据库
+    conn.execute("use KB_QA")  # 选择使用 KB_QA 数据库
     conn.execute("SET @@global.sql_mode=''")
 
-    # sql 中的内容为创建一个名为 new_table 的表
+    # sql 中的内容为创建一个名为 nlpccQA 的表
     sql = """create table nlpccQA(entity VARCHAR(50) character set utf8 collate utf8_unicode_ci,
     attribute VARCHAR(50) character set utf8 collate utf8_unicode_ci, answer VARCHAR(255) character set utf8 
     collate utf8_unicode_ci)"""  # ()中的参数可以自行设置
     conn.execute("drop table if exists nlpccQA")  # 如果表存在则删除
     conn.execute(sql)  # 创建表
 
-    #                           删除
-    # conn.execute("drop table new_table")
-
-    conn.close()  # 关闭游标连接
-    connect.close()  # 关闭数据库服务器连接 释放内存
+    conn.close()  # 关闭游标
+    connect.close()  # 关闭与数据库的连接
 
 
 def loaddata():
-    # 初始化数据库连接，使用pymysql模块
+    # 使用 pymysql，与数据库进行连接，同样，注意用户名和密码的设置。
     db_info = {'user': 'root',
                'password': '123456',
                'host': '127.0.0.1',
@@ -60,7 +56,7 @@ def loaddata():
 
     # 读取本地CSV文件
     df = pd.read_csv("./DB_Data/clean_triple.csv", sep=',', encoding='utf-8')
-    print(df)
+
     # 将新建的DataFrame储存为MySQL中的数据表，不储存index列(index=False)
     # if_exists:
     # 1.fail:如果表存在，啥也不做
@@ -81,6 +77,7 @@ def upload_data(sql):
         charset="utf8"
     )
     cursor = connect.cursor()  # 创建操作游标
+    results = None
     try:
         # 执行SQL语句
         cursor.execute(sql)

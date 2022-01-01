@@ -15,7 +15,7 @@ import os
 data_dir = 'NLPCC2016KBQA'
 file_name_list = ['nlpcc-iccpol-2016.kbqa.testing-data','nlpcc-iccpol-2016.kbqa.training-data']
 
-
+#文件处理
 for file_name in file_name_list:
     file_path_name = os.path.join(data_dir,file_name)
     file = []

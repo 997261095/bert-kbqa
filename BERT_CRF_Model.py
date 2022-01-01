@@ -10,11 +10,6 @@ CONFIG_NAME = "bert-base-chinese-config.json"
 VOB_NAME = "bert-base-chinese-vocab.txt"
 
 
-
-
-
-
-
 class BertCrf(nn.Module):
     def __init__(self,config_name:str,model_name:str = None,num_tags: int = 2, batch_first:bool = True) -> None:
         # 记录batch_first
@@ -58,7 +53,6 @@ class BertCrf(nn.Module):
         self.crf_model = CRF(num_tags=num_tags,batch_first=batch_first)
 
 
-
     def forward(self,input_ids:torch.Tensor,
                 tags:torch.Tensor = None,
                 attention_mask:Optional[torch.ByteTensor] = None,
@@ -68,14 +62,12 @@ class BertCrf(nn.Module):
 
         emissions = self.bertModel(input_ids = input_ids,attention_mask = attention_mask,token_type_ids=token_type_ids)[0]
 
-        # 这里在seq_len的维度上去头，是去掉了[CLS]，去尾巴有两种情况
-        # 1、是 <pad> 2、[SEP]
-
-
+        # 这里在seq_len的维度上去掉开头，是去掉了[CLS]，去尾巴有两种情况
+        # 第一种情况是 <pad>、第二种情况是 [SEP]
         new_emissions = emissions[:,1:-1]
         new_mask = attention_mask[:,2:].bool()
 
-        # 如果 tags 为 None，表示是一个预测的过程，不能求得loss,loss 直接为None
+        # 如果 tags 为 None，表示是一个预测的过程，不能求得 loss，则 loss 的值直接为 None
         if tags is None:
             loss = None
             pass
@@ -83,14 +75,10 @@ class BertCrf(nn.Module):
             new_tags = tags[:, 1:-1]
             loss = self.crf_model(emissions=new_emissions, tags=new_tags, mask=new_mask, reduction=reduction)
 
-
-
         if decode:
             tag_list = self.crf_model.decode(emissions = new_emissions,mask = new_mask)
             return [loss, tag_list]
 
         return [loss]
-
-
 
 

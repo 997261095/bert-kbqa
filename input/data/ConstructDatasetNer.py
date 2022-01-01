@@ -40,15 +40,22 @@ for file_name in file_name_list:
             if answer_str in line:
                 a_str = line.strip()
 
+            # 新的一个问题
             if start_str in line:  # new question answer triple
+                # 根据 .txt 对信息进行提取
                 entities = t_str.split("|||")[0].split(">")[1].strip()
                 q_str = q_str.split(">")[1].replace(" ", "").strip()
+
+                # 若该实体已经存在
                 if entities in q_str:
                     q_list = list(q_str)
                     seq_q_list.extend(q_list)
                     seq_q_list.extend([" "])
                     tag_list = ["O" for i in range(len(q_list))]
                     tag_start_index = q_str.find(entities)
+                    # B-IOC: 一个地名的开始
+                    # I-IOC：一个地名的中间部分
+                    # 其余为 O
                     for i in range(tag_start_index, tag_start_index + len(entities)):
                         if tag_start_index == i:
                             tag_list[i] = "B-LOC"
@@ -63,6 +70,8 @@ for file_name in file_name_list:
     print('\t'.join(seq_tag_list[0:50]))
     print('\t'.join(seq_q_list[0:50]))
     seq_result = [str(q) + " " + tag for q, tag in zip(seq_q_list, seq_tag_list)]
+    
+    # 将处理后的文件写在 ./input/NER_data 下
     if not os.path.exists(new_dir):
         os.mkdir(new_dir)
 
