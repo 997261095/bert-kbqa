@@ -5,6 +5,8 @@ from PySide6.QtCore import Qt, Slot
 from PySide6.QtSql import QSqlDatabase, QSqlQuery, QSqlRecord, QSqlTableModel
 from PySide6.QtQml import QmlElement
 
+from ProjectTest import Model
+
 table_name = "Conversations"
 QML_IMPORT_NAME = "ChatModel"
 QML_IMPORT_MAJOR_VERSION = 1
@@ -40,10 +42,6 @@ def createTable():
     )
 
 
-def get_answer(question):
-
-    return "You said '" + question + "'"
-
 @QmlElement
 class SqlConversationModel(QSqlTableModel):
     def __init__(self, parent=None):
@@ -59,6 +57,8 @@ class SqlConversationModel(QSqlTableModel):
 
         self.select()
         logging.debug("Table was loaded successfully.")
+
+        self.model = Model()
 
     
     def setRecipient(self, recipient):
@@ -118,7 +118,8 @@ class SqlConversationModel(QSqlTableModel):
         
 
         new_record = self.record()
-        new_record.setValue('message', get_answer(message))
+        ans = self.model.query(message.strip())
+        new_record.setValue('message', ans)
         new_record.setValue('author', recipient)
         new_record.setValue('recipient', author)
 
