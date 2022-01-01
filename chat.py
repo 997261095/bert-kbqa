@@ -13,19 +13,6 @@ import sqlDialog
 logging.basicConfig(filename='chat.log', level=logging.DEBUG)
 logger = logging.getLogger('logger')
 
-"""
-class Message(QObject):
-    author = "Me"
-    text = ""
-    def __init__(self, author_, text_, parent=None):
-        super.__init__(parent)
-        self.author = author_
-        self.text = text_
-
-
-class DialogModel:
-    dialog_histroy = []
-"""
 
 def connectToDatabase():
     database = QSqlDatabase.database()
@@ -48,6 +35,7 @@ def connectToDatabase():
     if not database.open():
         logger.error("Cannot open database")
         QFile.remove(filename)
+
 
 if __name__ == "__main__":
     app = QGuiApplication()
