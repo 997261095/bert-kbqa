@@ -240,6 +240,17 @@ def main():
             print(triple_list)
             if 0 == len(triple_list):
                 print("未找到 {} 相关信息".format(entity))
+                
+                print("正在通过网络查找中...")
+                WikiQuery.getInfobox(entity)
+                # if len(elem_dic) != 0:
+                #     for key in elem_dic:
+                #         #print(key.text, elem_dic[key].text)
+                #         if len(elem_dic[key].text) <= 10:
+                #             insert_data(entity, key.text, elem_dic[key].text)
+
+                print("查找完毕")
+
                 continue
             triple_list = list(zip(*triple_list))
             print(triple_list)
@@ -267,6 +278,8 @@ def main():
                     ret = "{}的{}是{}".format(entity, attribute, answer)
             if '' == ret:
                 print("未找到{}相关信息".format(entity))
+                print("正在通过网络查找中………………………………")
+                WikiQuery.getInfobox(entity)
             else:
                 print("回答:",ret)
 

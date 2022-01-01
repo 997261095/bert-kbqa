@@ -92,6 +92,25 @@ def upload_data(sql):
     return results
 
 
+def insert_data(entity, attributes, answer):
+    connect = pymysql.connect(
+        user="root",
+        password="123456",
+        host="127.0.0.1",
+        port=3306,
+        db="kb_qa",
+        charset="utf8"
+    )
+
+    # 创建操作游标
+    cursor = connect.cursor()
+    sql = "INSERT INTO nlpccQA(entity, attribute, answer) VALUES (%s, %s, %s)"
+    cursor.execute(sql, (entity, attributes, answer))
+    connect.commit()
+    cursor.close()
+    connect.close()
+
+
 if __name__ == '__main__':
     # create_db()
     # loaddata()
