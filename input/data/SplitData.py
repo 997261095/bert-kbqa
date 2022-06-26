@@ -1,23 +1,20 @@
-#
-# 切分数据集，
-# 原始的 nlpcc-iccpol-2016.kbqa.testing-data 有 9870 个样本
-# 原始的 nlpcc-iccpol-2016.kbqa.training-data 有 14609 个样本
-#
-# 将nlpcc-iccpol-2016.kbqa.testing-data 中的对半分，一半变成验证集(dev.text)，一半变成测试集(test.txt)
-# nlpcc-iccpol-2016.kbqa.training-data 保持不变，复制成为训练集 train.txt
-#
-
-
-import pandas as pd
 import os
+from Configurations import DATA_DIR
 
+"""
+切分数据集；
+原始的 nlpcc-iccpol-2016.kbqa.testing-data 有 9870 个样本
+原始的 nlpcc-iccpol-2016.kbqa.training-data 有 14609 个样本；
 
-data_dir = 'NLPCC2016KBQA'
-file_name_list = ['nlpcc-iccpol-2016.kbqa.testing-data','nlpcc-iccpol-2016.kbqa.training-data']
+nlpcc-iccpol-2016.kbqa.testing-data 中的数据对半分，一半变成验证集(dev.text)，一半变成测试集(test.txt)
+nlpcc-iccpol-2016.kbqa.training-data 保持不变，复制成为训练集 train.txt
+"""
 
-#文件处理
+file_name_list = ['nlpcc-iccpol-2016.kbqa.testing-data', 'nlpcc-iccpol-2016.kbqa.training-data']
+
+# 文件处理
 for file_name in file_name_list:
-    file_path_name = os.path.join(data_dir,file_name)
+    file_path_name = os.path.join(DATA_DIR, file_name)
     file = []
     with open(file_path_name,'r',encoding='utf-8') as f:
         for line in f:
@@ -25,26 +22,23 @@ for file_name in file_name_list:
             if line == '':
                 continue
             file.append(line)
-        f.close()
     if 'training' in file_name:
-        with open(os.path.join(data_dir,'train.txt') , "w", encoding='utf-8') as f:
+        with open(os.path.join(DATA_DIR,'train.txt') , "w", encoding='utf-8') as f:
             f.write('\n'.join(file))
-        f.close()
     elif 'testing' in file_name:
-        assert len(file) % 4 == 0           # 断言
-        testing_num = len(file) / 4         # 一个样本是由 4 行构成的
-        test_num = int(testing_num / 2)         # 真正的测试集分一半
+        assert len(file) % 4 == 0           # 断言处理，错误时触发异常
+        testing_num = len(file) // 4        # 一个样本是由 4 行构成的
+        line_no = testing_num // 2 * 4      # 将测试集分出一半用作评估
 
-        test_line_no = int(test_num * 4)
+        # 测试数据
+        with open(os.path.join(DATA_DIR, 'test.txt'), "w", encoding='utf-8') as f:
+            for line in file[:line_no]:
+                f.write(line + '\n')
 
-
-        with open(os.path.join(data_dir, 'test.txt'), "w", encoding='utf-8') as f:
-            f.write('\n'.join(file[:test_line_no]))     # 乘以四得到行号，前一半给 test 数据集
-        f.close()
-
-        with open(os.path.join(data_dir, 'dev.txt'), "w", encoding='utf-8') as f:
-            f.write('\n'.join(file[test_line_no:]))      # 乘以四得到行号，后一半给 dev 数据集
-        f.close()
+        # 进行评估的数据
+        with open(os.path.join(DATA_DIR, 'dev.txt'), "w", encoding='utf-8') as f:
+            for line in file[line_no:]:
+                f.write(line + '\n')
 
 print("Done")
 
