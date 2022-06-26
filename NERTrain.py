@@ -1,25 +1,3 @@
-# --data_dir
-# ./input/data/ner_data
-# --vob_file
-# ./input/config/bert-base-chinese-vocab.txt
-# --model_config
-# ./input/config/bert-base-chinese-config.json
-# --output
-# ./output
-# --pre_train_model
-# ./input/config/bert-base-chinese-model.bin
-# --max_seq_length
-# 64
-# --do_train
-# --train_batch_size
-# 16
-# --eval_batch_size
-# 256
-# --gradient_accumulation_steps
-# 4
-# --num_train_epochs
-# 15
-
 import argparse
 import logging
 import codecs
@@ -37,11 +15,11 @@ from transformers import AdamW, get_linear_schedule_with_warmup
 from sklearn.metrics import classification_report
 
 logger = logging.getLogger(__name__)
-# CRF_LABELS = ["O", "B-PER", "I-PER", "B-ORG", "I-ORG", "B-LOC", "I-LOC", "X", "[CLS]", "[SEP]"]
-# 在项目中只需要识别三个类型的项目即可
-# LABELS = ["O", "B-LOC", "I-LOC"]，需要预测的就只有这三个。
 
-CRF_LABELS = ["O", "B-LOC", "I-LOC"]
+# CRF_LABELS = ["O", "B-PER", "I-PER", "B-ORG", "I-ORG", "B-LOC", "I-LOC", "X", "[CLS]", "[SEP]"]
+
+# 在项目中只需要识别三个类型的项目即可
+CRF_LABELS = ["O", "B-LOC", "I-LOC"]    # 需要预测的就只有这三个
 
 def statistical_real_sentences(input_ids:torch.Tensor,mask:torch.Tensor,predict:list)-> list:
     # shape (batch_size,max_len)

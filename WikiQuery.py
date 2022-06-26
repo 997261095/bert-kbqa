@@ -1,7 +1,7 @@
 import time
 from selenium import webdriver
 from selenium.webdriver.common.keys import Keys
-from input.data.LoadDbData import insert_data
+from input.data.LoadMySQL import insert_data
 
 # getInfobox函数
 def getInfobox(name):
