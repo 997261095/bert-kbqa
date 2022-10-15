@@ -1,26 +1,3 @@
-# --data_dir
-# ./input/data/ner_data
-# --vob_file
-# ./input/config/bert-base-chinese-vocab.txt
-# --model_config
-# ./input/config/bert-base-chinese-config.json
-# --output
-# ./output
-# --pre_train_model
-# ./input/config/bert-base-chinese-model.bin
-# --max_seq_length
-# 64
-# --do_train
-# --train_batch_size
-# 32
-# --eval_batch_size
-# 256
-# --gradient_accumulation_steps
-# 4
-# --num_train_epochs
-# 15
-
-
 import argparse
 import logging
 import codecs
@@ -33,19 +10,16 @@ from tqdm import tqdm, trange
 from torch.utils.data import DataLoader, RandomSampler, SequentialSampler, TensorDataset
 from transformers import BertForSequenceClassification,BertTokenizer,BertConfig
 from transformers.data.processors.utils import DataProcessor, InputExample
-from BERT_CRF import BertCrf
-from transformers import AdamW, WarmupLinearSchedule
+from BERT_CRF_Model import BertCrf
+from transformers import AdamW, get_linear_schedule_with_warmup
 from sklearn.metrics import classification_report
 
 logger = logging.getLogger(__name__)
-#
+
 # CRF_LABELS = ["O", "B-PER", "I-PER", "B-ORG", "I-ORG", "B-LOC", "I-LOC", "X", "[CLS]", "[SEP]"]
-# 在这个项目中只需要识别三个类型的项目即可
-# 这里做以下测试，第一 LABELS = ["O", "B-LOC", "I-LOC"] ，因为需要预测的就只有这三个。
-# 第二 LABELS = ["O", "B-PER", "I-PER", "B-ORG", "I-ORG", "B-LOC", "I-LOC", "X", "[CLS]", "[SEP]"]
 
-CRF_LABELS = ["O", "B-LOC", "I-LOC"]
-
+# 在项目中只需要识别三个类型的项目即可
+CRF_LABELS = ["O", "B-LOC", "I-LOC"]    # 需要预测的就只有这三个
 
 def statistical_real_sentences(input_ids:torch.Tensor,mask:torch.Tensor,predict:list)-> list:
     # shape (batch_size,max_len)
@@ -53,7 +27,7 @@ def statistical_real_sentences(input_ids:torch.Tensor,mask:torch.Tensor,predict:
     # batch_size
     assert input_ids.shape[0] == len(predict)
 
-    # 第0位是[CLS] 最后一位是<pad> 或者 [SEP]
+    # 开头是 [CLS]，结尾是 <pad> 或者 [SEP]
     new_ids = input_ids[:,1:-1]
     new_mask = mask[:,2:]
 
@@ -67,29 +41,21 @@ def statistical_real_sentences(input_ids:torch.Tensor,mask:torch.Tensor,predict:
 
 def flatten(inputs:list) -> list:
     result = []
+    # 在列表末尾进行追加，以达到 flatten 的目的
     [result.extend(line) for line in inputs]
     return result
-
-
-
-
-
-
-
-
-
-
 
 
 def set_seed(args):
     random.seed(args.seed)
     np.random.seed(args.seed)
+    # 为 CPU 设置种子用于生成随机数， 使得结果是确定的。
     torch.manual_seed(args.seed)
-
 
 
 class CrfInputExample(object):
     def __init__(self, guid, text, label=None):
+        # 初始化
         self.guid = guid
         self.text = text
         self.label = label
@@ -97,13 +63,13 @@ class CrfInputExample(object):
 
 class CrfInputFeatures(object):
     def __init__(self, input_ids, attention_mask, token_type_ids, label):
+        # 初始化
         self.input_ids = input_ids
         self.attention_mask = attention_mask
         self.token_type_ids = token_type_ids
         self.label = label
 
-
-
+# 将语句序列化
 def crf_convert_examples_to_features(examples,tokenizer,
                                      max_length=512,
                                      label_list=None,
@@ -116,6 +82,7 @@ def crf_convert_examples_to_features(examples,tokenizer,
     features = []
 
     for (ex_index, example) in enumerate(examples):
+        # 调用 BertTokenizer
         inputs = tokenizer.encode_plus(
             example.text,
             add_special_tokens=True,
@@ -123,23 +90,20 @@ def crf_convert_examples_to_features(examples,tokenizer,
             truncate_first_sequence=True  # We're truncating the first sequence in priority if True
         )
         input_ids, token_type_ids = inputs["input_ids"], inputs["token_type_ids"]
+        # Masked 操作
         attention_mask = [1 if mask_padding_with_zero else 0] * len(input_ids)
-
 
         padding_length = max_length - len(input_ids)
         input_ids = input_ids + ([pad_token] * padding_length)
         attention_mask = attention_mask + ([0 if mask_padding_with_zero else 1] * padding_length)
         token_type_ids = token_type_ids + ([pad_token_segment_id] * padding_length)
 
-        # 第一个和第二个[0] 加的是[CLS]和[SEP]的位置,  [0]*padding_length是[pad] ，把这些都暂时算作"O"，后面用mask 来消除这些，不会影响
+        # 第一个和第二个[0] 加的是[CLS]和[SEP]的位置,  [0]*padding_length是[pad] ，把这些都暂时算作"O"，对 mask 没有影响
         labels_ids = [0] + [label_map[l] for l in example.label] + [0] + [0]*padding_length
-
-
 
         assert len(input_ids) == max_length, "Error with input length {} vs {}".format(len(input_ids), max_length)
         assert len(attention_mask) == max_length, "Error with input length {} vs {}".format(len(attention_mask),max_length)
         assert len(token_type_ids) == max_length, "Error with input length {} vs {}".format(len(token_type_ids),max_length)
-
         assert len(labels_ids) == max_length, "Error with input length {} vs {}".format(len(labels_ids),max_length)
 
 
@@ -158,14 +122,17 @@ def crf_convert_examples_to_features(examples,tokenizer,
 
 
 class NerProcessor(DataProcessor):
+    # 获取训练集
     def get_train_examples(self,data_dir):
         return self._create_examples(
             os.path.join(data_dir,"train.txt"))
 
+    # 获取验证集
     def get_dev_examples(self, data_dir):
         return self._create_examples(
             os.path.join(data_dir, "dev.txt"))
 
+    # 获取测试集
     def get_test_examples(self, data_dir):
         return self._create_examples(
             os.path.join(data_dir, "test.txt"))
@@ -227,18 +194,22 @@ def load_and_cache_example(args,tokenizer,processor,data_type):
         features = crf_convert_examples_to_features(examples=examples,tokenizer=tokenizer,max_length=args.max_seq_length,label_list=label_list)
         logger.info("Saving features into cached file %s", cached_features_file)
         torch.save(features, cached_features_file)
-
+    # 获取 input 的 ID
     all_input_ids = torch.tensor([f.input_ids for f in features], dtype=torch.long)
+    # 获取 掩码
     all_attention_mask = torch.tensor([f.attention_mask for f in features], dtype=torch.long)
+    # 获取 类型的 ID
     all_token_type_ids = torch.tensor([f.token_type_ids for f in features], dtype=torch.long)
+    # 获取标签
     all_label = torch.tensor([f.label for f in features], dtype=torch.long)
     dataset = TensorDataset(all_input_ids, all_attention_mask, all_token_type_ids, all_label)
     return dataset
 
 
 def trains(args,train_dataset,eval_dataset,model):
-
+    # RandomSampler, 随机采样器
     train_sampler = RandomSampler(train_dataset)
+
     train_dataloader = DataLoader(train_dataset, sampler=train_sampler, batch_size=args.train_batch_size)
 
     t_total = len(train_dataloader) // args.gradient_accumulation_steps * args.num_train_epochs
@@ -250,8 +221,8 @@ def trains(args,train_dataset,eval_dataset,model):
         {'params': [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)], 'weight_decay': 0.0}
     ]
     optimizer = AdamW(optimizer_grouped_parameters,lr=args.learning_rate,eps=args.adam_epsilon)
-
-    scheduler = WarmupLinearSchedule(optimizer, warmup_steps=args.warmup_steps, t_total=t_total)
+    # 学习率预热，在实验开始提高，后面逐渐下降；
+    scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=args.warmup_steps, num_training_steps = t_total)
     logger.info("***** Running training *****")
     logger.info("  Num examples = %d", len(train_dataset))
     logger.info("  Num Epochs = %d", args.num_train_epochs)
@@ -265,6 +236,7 @@ def trains(args,train_dataset,eval_dataset,model):
     set_seed(args)
     best_f1 = 0.
     for _ in train_iterator:
+        # 进度条，用于显示整个实验的进度
         epoch_iterator = tqdm(train_dataloader, desc="Iteration")
         for step,batch in enumerate(epoch_iterator):
             batch = tuple(t.to(args.device) for t in batch)
@@ -279,7 +251,9 @@ def trains(args,train_dataset,eval_dataset,model):
 
             if args.gradient_accumulation_steps > 1:
                 loss = loss / args.gradient_accumulation_steps
+            # 反向回溯
             loss.backward()
+            # 进行梯度截断
             torch.nn.utils.clip_grad_norm_(model.parameters(),args.max_grad_norm)
             logging_loss += loss.item()
             tr_loss += loss.item()
@@ -292,9 +266,9 @@ def trains(args,train_dataset,eval_dataset,model):
                             logging_loss)
                 logging_loss = 0.0
 
-                # if (global_step < 100 and global_step % 10 == 0) or (global_step % 50 == 0):
-                # 每 相隔 100步，评估一次
-                if global_step % 100 == 0:
+                # 每相隔 100步，评估一次
+                if global_step % .100 == 0:
+                    #评估并保存模型
                     best_f1 = evaluate_and_save_model(args,model,eval_dataset,_,global_step,best_f1)
 
     # 最后循环结束 再评估一次
@@ -305,6 +279,7 @@ def trains(args,train_dataset,eval_dataset,model):
 
 def evaluate_and_save_model(args,model,eval_dataset,epoch,global_step,best_f1):
     ret = evaluate(args, model, eval_dataset)
+    print(ret)
 
     precision_b = ret['1']['precision']
     recall_b = ret['1']['recall']
@@ -323,9 +298,9 @@ def evaluate_and_save_model(args,model,eval_dataset,epoch,global_step,best_f1):
     avg_recall = recall_b * weight_b + recall_i * weight_i
     avg_f1 = f1_b * weight_b + f1_i * weight_i
 
-    all_avg_precision = ret['micro avg']['precision']
-    all_avg_recall = ret['micro avg']['recall']
-    all_avg_f1 = ret['micro avg']['f1-score']
+    all_avg_precision = ret['macro avg']['precision']
+    all_avg_recall = ret['macro avg']['recall']
+    all_avg_f1 = ret['macro avg']['f1-score']
 
     logger.info("Evaluating EPOCH = [%d/%d] global_step = %d", epoch+1,args.num_train_epochs,global_step)
     logger.info("B-LOC precision = %f recall = %f  f1 = %f support = %d", precision_b, recall_b, f1_b,
@@ -339,16 +314,13 @@ def evaluate_and_save_model(args,model,eval_dataset,epoch,global_step,best_f1):
                 all_avg_f1)
 
     if avg_f1 > best_f1:
+        #若当前的模型比历史最优模型要好
         best_f1 = avg_f1
         torch.save(model.state_dict(), os.path.join(args.output_dir, "best_ner.bin"))
         logging.info("save the best model %s,avg_f1= %f", os.path.join(args.output_dir, "best_bert.bin"),
                      best_f1)
     # 返回出去，用于更新外面的 最佳值
     return best_f1
-
-
-
-
 
 
 def evaluate(args, model, eval_dataset):
@@ -380,8 +352,7 @@ def evaluate(args, model, eval_dataset):
                       'reduction':'none'
             }
             outputs = model(**inputs)
-            # temp_eval_loss shape: (batch_size)
-            # temp_pred : list[list[int]] 长度不齐
+
             temp_eval_loss, temp_pred = outputs[0], outputs[1]
 
             loss.extend(temp_eval_loss.tolist())
@@ -398,21 +369,18 @@ def evaluate(args, model, eval_dataset):
     return ret
 
 
-
-
-
-
 def main():
+    #argparse 命令行解析的标准模块， 在命令行中传入参数后让程序运行
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data_dir", default=None, type=str, required=True,
+    parser.add_argument("--data_dir", default=None, type=str,
                         help="数据文件目录，因当有train.txt dev.txt")
 
-    parser.add_argument("--vob_file", default=None, type=str, required=True,
+    parser.add_argument("--vob_file", default=None, type=str,
                         help="词表文件")
 
-    parser.add_argument("--model_config", default=None, type=str, required=True,
+    parser.add_argument("--model_config", default=None, type=str,
                         help="模型配置文件json文件")
-    parser.add_argument("--output_dir", default=None, type=str, required=True,
+    parser.add_argument("--output_dir", default=None, type=str,
                         help="输出结果的文件")
 
     # Other parameters
@@ -451,10 +419,10 @@ def main():
     logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s -   %(message)s',
                         datefmt='%m/%d/%Y %H:%M:%S',
                         level=logging.INFO)
-    #          filename='./output/bert-crf-ner.log',
+
     processor = NerProcessor()
 
-    # 得到tokenizer
+    # 得到 tokenizer
     tokenizer_inputs = ()
     tokenizer_kwards = {'do_lower_case': False,
                         'max_len': args.max_seq_length,
@@ -476,4 +444,5 @@ def main():
 
 
 if __name__ == '__main__':
+    torch.cuda.empty_cache()
     main()

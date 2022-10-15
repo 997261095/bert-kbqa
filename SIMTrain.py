@@ -1,25 +1,3 @@
-# --data_dir
-# ./input/data/sim_data
-# --vob_file
-# ./input/config/bert-base-chinese-vocab.txt
-# --model_config
-# ./input/config/bert-base-chinese-config.json
-# --output
-# ./output
-# --pre_train_model
-# ./input/config/bert-base-chinese-model.bin
-# --max_seq_length
-# 64
-# --do_train
-# --train_batch_size
-# 32
-# --eval_batch_size
-# 256
-# --gradient_accumulation_steps
-# 4
-# --num_train_epochs
-# 15
-
 import argparse
 from collections import Counter
 import code
@@ -33,13 +11,11 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, RandomSampler, SequentialSampler, TensorDataset
 
-from transformers import AdamW, WarmupLinearSchedule
+from transformers import AdamW, get_linear_schedule_with_warmup
 from transformers import BertConfig, BertForSequenceClassification, BertTokenizer
-from transformers import glue_convert_examples_to_features as convert_examples_to_features
 from transformers.data.processors.utils import DataProcessor, InputExample
 
 import numpy as np
-import pandas as pd
 
 logger = logging.getLogger(__name__)
 
@@ -76,9 +52,8 @@ def cal_acc(real_label,pred_label):
 
 
 
-
-
 class SimInputExample(object):
+    # 进行初始化
     def __init__(self, guid, question,attribute, label=None):
         self.guid = guid
         self.question = question
@@ -87,6 +62,7 @@ class SimInputExample(object):
 
 
 class SimInputFeatures(object):
+    # 进行初始化
     def __init__(self, input_ids, attention_mask, token_type_ids, label = None):
         self.input_ids = input_ids
         self.attention_mask = attention_mask
@@ -98,17 +74,19 @@ class SimProcessor(DataProcessor):
     """Processor for the FAQ problem
         modified from https://github.com/huggingface/transformers/blob/master/transformers/data/processors/glue.py#L154
     """
-
+    # 获取训练集
     def get_train_examples(self, data_dir):
         logger.info("*******  train  ********")
         return self._create_examples(
             os.path.join(data_dir, "train.txt"))
 
+    # 获取验证集
     def get_dev_examples(self, data_dir):
         logger.info("*******  dev  ********")
         return self._create_examples(
             os.path.join(data_dir, "dev.txt"))
 
+    # 获取测试集
     def get_test_examples(self,data_dir):
         logger.info("*******  test  ********")
         return self._create_examples(
@@ -133,7 +111,7 @@ class SimProcessor(DataProcessor):
         f.close()
         return examples
 
-
+# 将文本进行序列化
 def sim_convert_examples_to_features(examples,tokenizer,
                                      max_length=512,
                                      label_list=None,
@@ -230,7 +208,7 @@ def trains(args,train_dataset,eval_dataset,model):
     ]
     optimizer = AdamW(optimizer_grouped_parameters,lr=args.learning_rate,eps=args.adam_epsilon)
 
-    scheduler = WarmupLinearSchedule(optimizer, warmup_steps=args.warmup_steps, t_total=t_total)
+    scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=args.warmup_steps, num_training_steps=t_total)
     logger.info("***** Running training *****")
     logger.info("  Num examples = %d", len(train_dataset))
     logger.info("  Num Epochs = %d", args.num_train_epochs)
@@ -239,11 +217,14 @@ def trains(args,train_dataset,eval_dataset,model):
 
     global_step = 0
     tr_loss, logging_loss = 0.0, 0.0
+    # 梯度清零
     model.zero_grad()
     train_iterator = trange(int(args.num_train_epochs), desc="Epoch")
+    # 设置随机数种子
     set_seed(args)
     best_acc = 0.
     for _ in train_iterator:
+        # 进度条
         epoch_iterator = tqdm(train_dataloader, desc="Iteration")
         for step,batch in enumerate(epoch_iterator):
             batch = tuple(t.to(args.device) for t in batch)
@@ -257,6 +238,7 @@ def trains(args,train_dataset,eval_dataset,model):
             if args.gradient_accumulation_steps > 1:
                 loss = loss / args.gradient_accumulation_steps
             loss.backward()
+            # 梯度截断
             torch.nn.utils.clip_grad_norm_(model.parameters(),args.max_grad_norm)
             logging_loss += loss.item()
             tr_loss += loss.item()
@@ -311,6 +293,7 @@ def evaluate(args, model, eval_dataset):
     total_sample_num = 0  # 样本总数目
     all_real_label = []   # 记录所有的真实标签列表
     all_pred_label = []   # 记录所有的预测标签列表
+
     for batch in tqdm(eval_dataloader, desc="Evaluating"):
         model.eval()
         batch = tuple(t.to(args.device) for t in batch)

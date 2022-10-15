@@ -1,8 +1,13 @@
 from transformers import BertConfig, BertForSequenceClassification, BertTokenizer
 from torch.utils.data import DataLoader, RandomSampler, SequentialSampler, TensorDataset
-from SIM_main import SimProcessor,SimInputFeatures,cal_acc
+from SIMTrain import SimProcessor,SimInputFeatures,cal_acc
 import torch
 from tqdm import tqdm, trange
+
+"""
+对属性相似度模型进行测试
+"""
+
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 processor = SimProcessor()

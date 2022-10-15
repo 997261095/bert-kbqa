@@ -1,22 +1,25 @@
-from BERT_CRF import BertCrf
-from NER_main import NerProcessor, CRF_LABELS
-from SIM_main import SimProcessor,SimInputFeatures
+from BERT_CRF_Model import BertCrf
+from NERTrain import NerProcessor, CRF_LABELS
+from SIMTrain import SimProcessor,SimInputFeatures
 from transformers import BertTokenizer, BertConfig, BertForSequenceClassification
 from torch.utils.data import DataLoader, RandomSampler, SequentialSampler, TensorDataset
 import torch
 import pymysql
 from tqdm import tqdm, trange
+import WikiQuery
 
-
+# 载入 GPU，没有则使用 CPU
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 
+# 获取之前训练的 NER 模型
 def get_ner_model(config_file,pre_train_model,label_num = 2):
     model = BertCrf(config_name=config_file,num_tags=label_num, batch_first=True)
     model.load_state_dict(torch.load(pre_train_model))
     return model.to(device)
 
 
+# 获取之前训练的 SIM 模型
 def get_sim_model(config_file,pre_train_model,label_num = 2):
     bert_config = BertConfig.from_pretrained(config_file)
     bert_config.num_labels = label_num
@@ -25,6 +28,7 @@ def get_sim_model(config_file,pre_train_model,label_num = 2):
     return model
 
 
+# 从一个句子中获取实体
 def get_entity(model,tokenizer,sentence,max_len = 64):
     pad_token = 0
     sentence_list = list(sentence.strip().replace(' ',''))
@@ -86,6 +90,7 @@ def get_entity(model,tokenizer,sentence,max_len = 64):
     return "".join(entity_list)
 
 
+# 语义匹配
 def semantic_matching(model,tokenizer,question,attribute_list,answer_list,max_length):
 
     assert len(attribute_list) == len(answer_list)
@@ -157,7 +162,7 @@ def semantic_matching(model,tokenizer,question,attribute_list,answer_list,max_le
 
 
 def select_database(sql):
-    # connect database
+    # 连接数据库
     connect = pymysql.connect(user="root",password="123456",host="127.0.0.1",port=3306,db="kb_qa",charset="utf8")
     cursor = connect.cursor()  # 创建操作游标
     try:
@@ -174,7 +179,7 @@ def select_database(sql):
     return results
 
 
-# 文字直接匹配，看看属性的词语在不在句子之中
+# 文字直接匹配，看看属性的词是否在句子中
 def text_match(attribute_list,answer_list,sentence):
 
     assert len(attribute_list) == len(answer_list)
@@ -190,10 +195,9 @@ def text_match(attribute_list,answer_list,sentence):
         return "",""
 
 
-
-def main():
-
-    with torch.no_grad():
+class Model:
+    @torch.no_grad()
+    def __init__(self):
         tokenizer_inputs = ()
         tokenizer_kwards = {'do_lower_case': False,
                             'max_len': 64,
@@ -215,52 +219,93 @@ def main():
         sim_model = sim_model.to(device)
         sim_model.eval()
 
-        while True:
-            print("====="*10)
-            raw_text = input("问题：\n")
-            raw_text = raw_text.strip()
-            if ( "quit" == raw_text ):
-                print("quit")
-                return
-            entity = get_entity(model=ner_model, tokenizer=tokenizer, sentence=raw_text, max_len=64)
-            print("实体:", entity)
-            if '' == entity:
-                print("未发现实体")
-                continue
-            sql_str = "select * from nlpccqa where entity = '{}'".format(entity)
-            triple_list = select_database(sql_str)
-            triple_list = list(triple_list)
-            if 0 == len(triple_list):
-                print("未找到 {} 相关信息".format(entity))
-                continue
-            triple_list = list(zip(*triple_list))
-            # print(triple_list)
-            attribute_list = triple_list[1]
-            answer_list = triple_list[2]
-            attribute, answer = text_match(attribute_list, answer_list, raw_text)
-            if attribute != '' and answer != '':
-                ret = "{}的{}是{}".format(entity, attribute, answer)
-            else:
-                sim_model = get_sim_model(config_file='./input/config/bert-base-chinese-config.json',
-                                          pre_train_model='./output/best_sim.bin',
-                                          label_num=len(sim_processor.get_labels()))
+    @torch.no_grad()
+    def query(self, raw_text) -> str:
+        # 获取实体
+        entity = get_entity(model=self.ner_model, tokenizer=self.tokenizer, sentence=raw_text, max_len=64)
+        
+        print("实体:", entity)
+        
+        if '' == entity:
+            return "未发现实体"
+        
+        sql_str = "select * from nlpccqa where entity = '{}'".format(entity)
 
-                sim_model = sim_model.to(device)
-                sim_model.eval()
-                attribute_idx = semantic_matching(sim_model, tokenizer, raw_text, attribute_list, answer_list, 64).item()
-                if -1 == attribute_idx:
-                    ret = ''
-                else:
-                    attribute = attribute_list[attribute_idx]
-                    answer = answer_list[attribute_idx]
-                    ret = "{}的{}是{}".format(entity, attribute, answer)
-            if '' == ret:
-                print("未找到{}相关信息".format(entity))
+        triple_list = select_database(sql_str)
+        triple_list = list(triple_list)
+        
+        print(triple_list)
+        
+        if 0 == len(triple_list):
+            # 未找到相关信息
+
+            print("未找到 {} 相关信息".format(entity))
+
+            print("正在通过网络查找中...")
+
+            WikiQuery.getInfobox(entity)
+            # if len(elem_dic) != 0:
+            #     for key in elem_dic:
+            #         #print(key.text, elem_dic[key].text)
+            #         if len(elem_dic[key].text) <= 10:
+            #             insert_data(entity, key.text, elem_dic[key].text)
+
+            print("查找完毕")
+
+            return "未找到 {} 相关信息，尝试通过网络查找...".format(entity)
+
+        triple_list = list(zip(*triple_list))
+        print(triple_list)
+
+        attribute_list = triple_list[1]
+        answer_list = triple_list[2]
+        # 直接进行匹配
+        attribute, answer = text_match(attribute_list, answer_list, raw_text)
+        if attribute != '' and answer != '':
+            ret = "{}的{}是{}".format(entity, attribute, answer)
+        else:
+            self.sim_model = get_sim_model(config_file='./input/config/bert-base-chinese-config.json',
+                                           pre_train_model='./output/best_sim.bin',
+                                           label_num=len(self.sim_processor.get_labels()))
+
+            self.sim_model = self.sim_model.to(device)
+            self.sim_model.eval()
+            # 进行语义匹配
+            attribute_idx = semantic_matching(self.sim_model, self.tokenizer, raw_text, attribute_list, answer_list, 64).item()
+            if -1 == attribute_idx:
+                ret = ''
             else:
-                print("回答:",ret)
+                attribute = attribute_list[attribute_idx]
+                answer = answer_list[attribute_idx]
+                ret = "{}的{}是{}".format(entity, attribute, answer)
+        
+        if '' == ret:
+            print("未找到{}相关信息".format(entity))
+            print("正在通过网络查找中...")
+            WikiQuery.getInfobox(entity)
+            return "未找到 {} 相关信息，尝试通过网络查找...".format(entity)
+        else:
+            return ret
+
 
 if __name__ == '__main__':
-    main()
+    
+    model = Model()
+
+    while True:
+
+        print("====="*10)
+
+        raw_text = input("问题：\n").strip()
+        
+        # 输入 quit 则退出。
+        if ( "quit" == raw_text ):
+            print("quit")
+            break
+        
+        ans = model.query(raw_text)
+        
+        print('回答:', ans)
 
 
 

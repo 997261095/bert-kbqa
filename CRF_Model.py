@@ -2,6 +2,9 @@ from typing import List, Optional
 import torch
 import torch.nn as nn
 
+"""
+CRF 条件随机场模型；
+"""
 
 class CRF(nn.Module):
     def __init__(self,num_tags : int = 2, batch_first:bool = True) -> None:
@@ -10,7 +13,8 @@ class CRF(nn.Module):
         super().__init__()
         self.num_tags = num_tags
         self.batch_first = batch_first
-        # start 到其他tag(不包含end)的得分
+        # start 到其他 tag (不包含 end) 的得分
+        # (从开始节点到其他非 end 节点的 scores)
         self.start_transitions = nn.Parameter(torch.empty(num_tags))
         # 到其他tag(不包含start)到end的得分
         self.end_transitions = nn.Parameter(torch.empty(num_tags))
@@ -21,6 +25,7 @@ class CRF(nn.Module):
 
         self.reset_parameters()
 
+    # 对参数进行重新设置
     def reset_parameters(self):
         init_range = 0.1
         nn.init.uniform_(self.start_transitions,-init_range,init_range)
@@ -30,6 +35,7 @@ class CRF(nn.Module):
     def __repr__(self):
         return f'{self.__class__.__name__}(num_tags={self.num_tags})'
 
+    # 向前传播；
     def forward(self, emissions:torch.Tensor,
                 tags:torch.Tensor = None,
                 mask:Optional[torch.ByteTensor] = None,
@@ -42,6 +48,7 @@ class CRF(nn.Module):
             raise ValueError(f'invalid reduction {reduction}')
 
         if mask is None:
+            #生成值全为1的张量，用于掩码
             mask = torch.ones_like(tags,dtype = torch.uint8)
     # a.shape (seq_len,batch_size)
     # a[0] shape ? batch_size
@@ -79,10 +86,6 @@ class CRF(nn.Module):
             mask = mask.transpose(0,1)
 
         return self._viterbi_decode(emissions,mask)
-
-
-
-
 
 
     def _validate(self,
@@ -146,7 +149,7 @@ class CRF(nn.Module):
         # 这里是为了获取每一个样本最后一个词的tag。
         # shape: (batch_size,)   每一个batch 的真实长度
         seq_ends = mask.long().sum(dim=0) - 1
-        # 每个样本最火一个词的tag
+        # 每个样本最后一个词的tag
         last_tags = tags[seq_ends,torch.arange(batch_size)]
         # shape: (batch_size,) 每一个样本到最后一个词的得分加上之前的score
         score += self.end_transitions[last_tags]
